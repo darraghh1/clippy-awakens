@@ -5,26 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clippy Awakens</title>
     <style>
-        body {
+        html, body {
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background: #008080;
-            color: white;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            overflow: hidden;
+            /* Allow clicks to pass through to desktop */
+            pointer-events: none;
         }
-        h1 { font-size: 24px; }
-        p { font-size: 14px; color: #ccc; }
+
+        /* Clippy elements intercept mouse events */
+        .clippy,
+        .clippy-balloon {
+            pointer-events: auto;
+        }
+
+        /* Debug indicator — remove after verification */
+        #debug-overlay {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: rgba(255, 0, 0, 0.5);
+            font-size: 10px;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 9999;
+        }
     </style>
 </head>
 <body>
-    <div>
-        <h1>Clippy Awakens</h1>
-        <p>Tauri webview loaded successfully.</p>
-        <p>Phase 01 complete — scaffold working.</p>
-    </div>
+    <div id="debug-overlay">Clippy Awakens — Overlay Active</div>
 </body>
 </html>
