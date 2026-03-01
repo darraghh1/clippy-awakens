@@ -1,0 +1,54 @@
+{
+  "$comment": [
+    "Copy the hooks below into your .claude/settings.json (or merge with existing hooks).",
+    "Adjust the paths to point to where you placed the hook scripts.",
+    "These hooks require: Python 3.11+, uv (https://docs.astral.sh/uv/), and curl."
+  ],
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run /path/to/clippy-awakens/hooks/claude-code/on_stop.py",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run /path/to/clippy-awakens/hooks/claude-code/on_notification.py",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run /path/to/clippy-awakens/hooks/claude-code/on_session_end.py",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run /path/to/clippy-awakens/hooks/claude-code/on_error.py",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}

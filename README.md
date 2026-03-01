@@ -111,6 +111,86 @@ build/            — Compiled clippy.js engine
 src/              — Original clippy.js source (do not modify)
 ```
 
+## Claude Code Hooks Integration
+
+Pre-built hooks are included in `hooks/claude-code/` to connect Claude Code to Clippy automatically.
+
+### What fires when
+
+| Hook | Event | Clippy does... |
+|------|-------|----------------|
+| `on_stop.py` | Claude finishes a task | Congratulatory animation + witty remark |
+| `on_notification.py` | Claude needs your input | Attention-grabbing animation |
+| `on_session_end.py` | Session ends | Farewell wave |
+| `on_error.py` | A tool call fails | Alert animation + snarky comment |
+
+### Prerequisites
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) (Python package runner)
+- `curl` (pre-installed on most systems)
+- SSH tunnel: `ssh -R 9999:localhost:9999 your-linux-host`
+
+### Install
+
+1. Copy the hooks directory somewhere permanent (or use it from the cloned repo):
+
+```bash
+cp -r hooks/claude-code ~/.claude/hooks/clippy-awakens
+```
+
+2. Add hooks to your `.claude/settings.json` (merge with existing hooks if you have them):
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "uv run ~/.claude/hooks/clippy-awakens/on_stop.py", "timeout": 5000 }]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [{ "type": "command", "command": "uv run ~/.claude/hooks/clippy-awakens/on_notification.py", "timeout": 5000 }]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [{ "type": "command", "command": "uv run ~/.claude/hooks/clippy-awakens/on_session_end.py", "timeout": 5000 }]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "uv run ~/.claude/hooks/clippy-awakens/on_error.py", "timeout": 5000 }]
+      }
+    ]
+  }
+}
+```
+
+3. Test it:
+
+```bash
+curl http://localhost:9999/health    # should return OK
+curl http://localhost:9999/complete  # Clippy should celebrate
+```
+
+### Custom messages from hooks
+
+Use `notify.py` directly in your own hooks:
+
+```python
+from notify import notify, message
+
+notify("complete")                           # predefined event
+message("Refactored 12 files successfully")  # custom speech bubble
+```
+
+### Full settings example
+
+See `hooks/claude-code/settings.example.json` for a complete hooks configuration template.
+
 ## Testing from Linux
 
 ```bash
