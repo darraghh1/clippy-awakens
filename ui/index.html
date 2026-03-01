@@ -28,6 +28,8 @@
     <script src="vendor/jquery.min.js"></script>
     <script src="build/clippy.js"></script>
     <script src="clippy-test.js"></script>
+    <script src="clippy-bridge.js"></script>
+    <script src="clippy-bridge-test.js"></script>
     <script>
         // Point to local agents directory
         clippy.BASE_PATH = 'agents/';
@@ -87,15 +89,50 @@
         clippy.load('Clippy', function(agent) {
             currentAgent = agent;
             agent.show();
-            agent.speak('Hello! Clippy Awakens is running.');
 
-            // Run self-test
+            // Initialize the event bridge
+            ClippyBridge.init(agent);
+
+            // Listen for events from Rust backend
+            if (window.__TAURI__) {
+                window.__TAURI__.event.listen('clippy-event', function(event) {
+                    console.log('ClippyBridge: Received event:', event.payload);
+                    var eventType = event.payload.type || event.payload;
+                    ClippyBridge.handleEvent(eventType);
+                });
+                console.log('ClippyBridge: Tauri event listener registered');
+            } else {
+                console.warn('ClippyBridge: Tauri API not available (running in browser?)');
+            }
+
+            // Initial greeting
+            agent.speak('Clippy Awakens! I\'m listening for Claude Code events.');
+
+            // Run self-tests
             clippySelfTest(agent);
+            testEventMapping();
 
             console.log('Clippy loaded successfully');
         }, function(err) {
             console.error('Failed to load Clippy:', err);
         });
+
+        // Debug: Trigger events manually from browser console
+        window.testEvent = function(type) {
+            ClippyBridge.handleEvent(type || 'complete');
+        };
+
+        window.testAllEvents = function() {
+            var events = ['complete', 'error', 'attention', 'stop', 'session-end'];
+            var delay = 0;
+            events.forEach(function(type) {
+                setTimeout(function() {
+                    console.log('Testing event:', type);
+                    ClippyBridge.handleEvent(type);
+                }, delay);
+                delay += 10000; // 10 seconds between each
+            });
+        };
     </script>
 </body>
 </html>

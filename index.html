@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clippy.js — It looks like you're trying to browse the web!</title>
+    <link rel="stylesheet" type="text/css" href="build/clippy.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #008080;
+            color: #000;
+            min-height: 100vh;
+        }
+
+        /* Windows 98 aesthetic */
+        .window {
+            background: #c0c0c0;
+            border: 2px outset #fff;
+            margin: 40px auto;
+            max-width: 640px;
+            box-shadow: 2px 2px 0 #000;
+        }
+
+        .title-bar {
+            background: linear-gradient(90deg, #000080, #1084d0);
+            color: white;
+            padding: 3px 4px;
+            font-weight: bold;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title-bar-buttons {
+            display: flex;
+            gap: 2px;
+        }
+
+        .title-bar-buttons button {
+            width: 16px;
+            height: 14px;
+            font-size: 8px;
+            border: 1px outset #c0c0c0;
+            background: #c0c0c0;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .window-body {
+            padding: 16px;
+        }
+
+        h1 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: #000080;
+        }
+
+        p { margin-bottom: 10px; font-size: 13px; }
+
+        .controls {
+            margin-top: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .controls button {
+            padding: 4px 12px;
+            font-size: 12px;
+            border: 2px outset #c0c0c0;
+            background: #c0c0c0;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .controls button:active {
+            border-style: inset;
+        }
+
+        .agent-select {
+            margin-top: 12px;
+        }
+
+        .agent-select label {
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .agent-select select {
+            font-size: 12px;
+            padding: 2px;
+            border: 1px inset #c0c0c0;
+        }
+
+        #animations-list {
+            margin-top: 12px;
+            font-size: 11px;
+            color: #333;
+            max-height: 80px;
+            overflow-y: auto;
+            border: 1px inset #c0c0c0;
+            padding: 4px;
+            background: #fff;
+            display: none;
+        }
+
+        #status {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #000080;
+            min-height: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="window">
+        <div class="title-bar">
+            <span>📎 Clippy.js Control Panel</span>
+            <div class="title-bar-buttons">
+                <button>_</button>
+                <button>□</button>
+                <button>×</button>
+            </div>
+        </div>
+        <div class="window-body">
+            <h1>It looks like you're trying to browse the web!</h1>
+            <p>Welcome to Clippy.js — resurrected from the digital graveyard of Microsoft Office 97.</p>
+            <p>Choose your agent and click "Summon" to bring them back to life.</p>
+
+            <div class="agent-select">
+                <label for="agent">Choose Agent: </label>
+                <select id="agent">
+                    <option value="Clippy">Clippy</option>
+                    <option value="Bonzi">Bonzi</option>
+                    <option value="F1">F1 (Robot)</option>
+                    <option value="Genie">Genie</option>
+                    <option value="Genius">Genius (Einstein)</option>
+                    <option value="Links">Links (Cat)</option>
+                    <option value="Merlin">Merlin</option>
+                    <option value="Peedy">Peedy (Parrot)</option>
+                    <option value="Rocky">Rocky (Dog)</option>
+                    <option value="Rover">Rover (Dog)</option>
+                </select>
+            </div>
+
+            <div class="controls">
+                <button onclick="summonAgent()">Summon</button>
+                <button onclick="currentAgent && currentAgent.animate()">Random Animation</button>
+                <button onclick="currentAgent && currentAgent.speak('It looks like you\'re writing a letter. Would you like help?')">Speak</button>
+                <button onclick="currentAgent && currentAgent.play('Wave')">Wave</button>
+                <button onclick="currentAgent && currentAgent.play('Thinking')">Think</button>
+                <button onclick="currentAgent && currentAgent.play('Searching')">Search</button>
+                <button onclick="showAnimations()">List Animations</button>
+                <button onclick="currentAgent && currentAgent.hide()">Hide</button>
+            </div>
+
+            <div id="animations-list"></div>
+            <div id="status">Ready. Choose an agent and click Summon.</div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="build/clippy.js"></script>
+    <script>
+        // Point to local agents instead of dead S3 bucket
+        clippy.BASE_PATH = '/agents/';
+
+        var currentAgent = null;
+
+        function setStatus(msg) {
+            document.getElementById('status').textContent = msg;
+        }
+
+        function summonAgent() {
+            var name = document.getElementById('agent').value;
+            setStatus('Loading ' + name + '...');
+
+            // Hide existing agent
+            if (currentAgent) {
+                currentAgent.hide(true);
+                currentAgent = null;
+            }
+
+            clippy.load(name, function (agent) {
+                currentAgent = agent;
+                agent.show();
+                setStatus(name + ' is alive! Double-click to trigger animation. Drag to move.');
+                agent.speak('Hello! I\'m ' + name + '. How can I help you today?');
+            }, function () {
+                setStatus('Failed to load ' + name + '. Check console for errors.');
+            });
+        }
+
+        function showAnimations() {
+            if (!currentAgent) {
+                setStatus('Load an agent first!');
+                return;
+            }
+            var list = currentAgent.animations();
+            var el = document.getElementById('animations-list');
+            el.textContent = list.join(', ');
+            el.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
