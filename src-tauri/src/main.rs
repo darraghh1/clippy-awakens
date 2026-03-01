@@ -4,6 +4,7 @@
 mod agents;
 mod events;
 mod server;
+mod sounds;
 
 fn main() {
     env_logger::init();

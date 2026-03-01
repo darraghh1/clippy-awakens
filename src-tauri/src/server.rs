@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 use crate::events::{is_valid_event, ClippyEvent};
+use crate::sounds;
 
 /// Shared state for axum handlers
 #[derive(Clone)]
@@ -58,6 +59,10 @@ fn emit_event(state: &AppState, event_type: &str) {
         event_type: event_type.to_string(),
     };
     log::info!("Event received: {}", event_type);
+
+    // Play notification sound (non-blocking — spawns a thread)
+    sounds::play_event_sound(event_type);
+
     if let Err(e) = state.app_handle.emit("clippy-event", &payload) {
         log::warn!("Failed to emit clippy-event: {}", e);
     }
