@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agents;
+mod config;
 mod events;
 mod server;
 mod sounds;
@@ -17,6 +18,10 @@ fn main() {
         .manage(Arc::new(tray::TrayState::new()))
         .invoke_handler(tauri::generate_handler![
             agents::list_available_agents,
+            config::get_config,
+            config::save_position_cmd,
+            config::save_agent_preference,
+            config::save_mute_state,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

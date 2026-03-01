@@ -37,6 +37,32 @@
         var currentAgent = null;
         var currentAgentName = 'Clippy';
 
+        // Save position after drag (hooks into clippy.js drag end)
+        function hookDragSave(agent) {
+            var origFinishDrag = agent._finishDrag;
+            if (origFinishDrag) {
+                agent._finishDrag = function() {
+                    origFinishDrag.call(this);
+                    var offset = this._el ? this._el.offset() : null;
+                    if (offset && window.__TAURI__) {
+                        window.__TAURI__.core.invoke('save_position_cmd', {
+                            x: offset.left,
+                            y: offset.top
+                        });
+                    }
+                };
+            }
+        }
+
+        // Save agent preference when switching
+        function saveAgentPreference(agentName) {
+            if (window.__TAURI__) {
+                window.__TAURI__.core.invoke('save_agent_preference', {
+                    agent: agentName
+                });
+            }
+        }
+
         // Switch to a different agent at runtime
         function switchAgent(name, callback) {
             console.log('Switching agent to:', name);
@@ -74,6 +100,10 @@
                 }
 
                 agent.show();
+                hookDragSave(agent);
+
+                // Save preference
+                saveAgentPreference(name);
 
                 // Run self-test on new agent
                 clippySelfTest(agent);
@@ -85,71 +115,123 @@
             });
         }
 
-        // Load default agent on startup
-        clippy.load('Clippy', function(agent) {
-            currentAgent = agent;
-            agent.show();
-
-            // Initialize the event bridge
-            ClippyBridge.init(agent);
-
-            // Listen for events from Rust backend
-            if (window.__TAURI__) {
-                window.__TAURI__.event.listen('clippy-event', function(event) {
-                    console.log('ClippyBridge: Received event:', event.payload);
-                    var eventType = event.payload.type || event.payload;
-                    ClippyBridge.handleEvent(eventType);
-                });
-
-                // Listen for tray visibility toggle
-                window.__TAURI__.event.listen('clippy-visibility', function(event) {
-                    var visible = event.payload;
-                    if (visible && currentAgent) {
-                        currentAgent.show();
-                        currentAgent.play('Greeting');
-                        currentAgent.speak('You summoned me! What can I do for you?');
-                    } else if (!visible && currentAgent) {
-                        currentAgent.play('GoodBye');
-                        setTimeout(function() {
-                            if (currentAgent) {
-                                currentAgent.hide();
-                            }
-                        }, 1500);
-                    }
-                });
-
-                // Listen for mute toggle from tray
-                window.__TAURI__.event.listen('clippy-mute', function(event) {
-                    var muted = event.payload;
-                    console.log('Sound muted:', muted);
-                });
-
-                // Listen for agent switch from tray menu
-                window.__TAURI__.event.listen('clippy-switch-agent', function(event) {
-                    var agentName = event.payload;
-                    console.log('Switching agent to:', agentName);
-                    switchAgent(agentName, function(agent) {
-                        ClippyBridge.init(agent);
-                        agent.speak("I'm " + agentName + "! Nice to meet you.");
-                    });
-                });
-
-                console.log('ClippyBridge: Tauri event listeners registered');
-            } else {
+        // Register all Tauri event listeners
+        function registerTauriListeners() {
+            if (!window.__TAURI__) {
                 console.warn('ClippyBridge: Tauri API not available (running in browser?)');
+                return;
             }
 
-            // Initial greeting
-            agent.speak('Clippy Awakens! I\'m listening for Claude Code events.');
+            // Listen for pre-canned events from Rust backend
+            window.__TAURI__.event.listen('clippy-event', function(event) {
+                console.log('ClippyBridge: Received event:', event.payload);
+                var eventType = event.payload.type || event.payload;
+                ClippyBridge.handleEvent(eventType);
+            });
 
-            // Run self-tests
-            clippySelfTest(agent);
-            testEventMapping();
+            // Listen for custom messages from /message endpoint
+            window.__TAURI__.event.listen('clippy-message', function(event) {
+                console.log('ClippyBridge: Received custom message:', event.payload);
+                var text = event.payload.text || event.payload;
+                ClippyBridge.handleCustomMessage(text);
+            });
 
-            console.log('Clippy loaded successfully');
-        }, function(err) {
-            console.error('Failed to load Clippy:', err);
-        });
+            // Listen for tray visibility toggle
+            window.__TAURI__.event.listen('clippy-visibility', function(event) {
+                var visible = event.payload;
+                if (visible && currentAgent) {
+                    currentAgent.show();
+                    currentAgent.play('Greeting');
+                    currentAgent.speak('You summoned me! What can I do for you?');
+                } else if (!visible && currentAgent) {
+                    currentAgent.play('GoodBye');
+                    setTimeout(function() {
+                        if (currentAgent) {
+                            currentAgent.hide();
+                        }
+                    }, 1500);
+                }
+            });
+
+            // Listen for mute toggle from tray — persist to config
+            window.__TAURI__.event.listen('clippy-mute', function(event) {
+                var muted = event.payload;
+                console.log('Sound muted:', muted);
+                window.__TAURI__.core.invoke('save_mute_state', { muted: muted });
+            });
+
+            // Listen for agent switch from tray menu
+            window.__TAURI__.event.listen('clippy-switch-agent', function(event) {
+                var agentName = event.payload;
+                console.log('Switching agent to:', agentName);
+                switchAgent(agentName, function(agent) {
+                    ClippyBridge.init(agent);
+                    agent.speak("I'm " + agentName + "! Nice to meet you.");
+                });
+            });
+
+            console.log('ClippyBridge: Tauri event listeners registered');
+        }
+
+        // Load agent and initialize — uses config for preferred agent if available
+        function initializeApp() {
+            var startAgent = 'Clippy';
+            var startPosition = null;
+
+            function loadAndStart(agentName, position) {
+                clippy.load(agentName, function(agent) {
+                    currentAgent = agent;
+                    currentAgentName = agentName;
+
+                    // Restore saved position
+                    if (position) {
+                        agent.moveTo(position.x, position.y, 0);
+                    }
+
+                    agent.show();
+                    hookDragSave(agent);
+
+                    // Initialize the event bridge
+                    ClippyBridge.init(agent);
+
+                    // Register Tauri listeners
+                    registerTauriListeners();
+
+                    // Initial greeting
+                    agent.speak(agentName + ' Awakens! Listening for Claude Code events.');
+
+                    // Run self-tests
+                    clippySelfTest(agent);
+                    testEventMapping();
+
+                    console.log(agentName + ' loaded successfully');
+                }, function(err) {
+                    console.error('Failed to load ' + agentName + ':', err);
+                    // Fallback to Clippy if preferred agent fails
+                    if (agentName !== 'Clippy') {
+                        console.log('Falling back to Clippy...');
+                        loadAndStart('Clippy', position);
+                    }
+                });
+            }
+
+            // Try to load config from Tauri
+            if (window.__TAURI__) {
+                window.__TAURI__.core.invoke('get_config').then(function(config) {
+                    console.log('Loaded config:', config);
+                    startAgent = config.agent || 'Clippy';
+                    startPosition = config.position || null;
+                    loadAndStart(startAgent, startPosition);
+                }).catch(function(err) {
+                    console.warn('Failed to load config, using defaults:', err);
+                    loadAndStart('Clippy', null);
+                });
+            } else {
+                loadAndStart('Clippy', null);
+            }
+        }
+
+        initializeApp();
 
         // Debug: Trigger events manually from browser console
         window.testEvent = function(type) {

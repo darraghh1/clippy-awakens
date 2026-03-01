@@ -1,14 +1,15 @@
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
     Json, Router,
 };
+use serde::Deserialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::events::{is_valid_event, ClippyEvent};
+use crate::events::{is_valid_event, ClippyEvent, ClippyMessage};
 use crate::sounds;
 use crate::tray::TrayState;
 
@@ -30,6 +31,7 @@ pub async fn start_server(app_handle: AppHandle) {
         .route("/attention", get(handle_attention))
         .route("/stop", get(handle_stop))
         .route("/session-end", get(handle_session_end))
+        .route("/message", get(handle_message))
         .route("/health", get(handle_health))
         .with_state(state);
 
@@ -101,6 +103,39 @@ async fn handle_stop(State(state): State<AppState>) -> impl IntoResponse {
 
 async fn handle_session_end(State(state): State<AppState>) -> impl IntoResponse {
     emit_event(&state, "session-end");
+    (StatusCode::OK, "OK")
+}
+
+/// Query parameters for the /message endpoint
+#[derive(Debug, Deserialize)]
+struct MessageParams {
+    text: String,
+}
+
+async fn handle_message(
+    State(state): State<AppState>,
+    Query(params): Query<MessageParams>,
+) -> impl IntoResponse {
+    log::info!("Custom message received: {}", params.text);
+
+    // Check mute state before playing sound
+    let tray_state = state.app_handle.state::<Arc<TrayState>>();
+    if !tray_state.is_muted() {
+        sounds::play_event_sound("attention");
+    }
+
+    // Ensure agent is visible
+    tray_state.set_visible(true);
+    let _ = state.app_handle.emit("clippy-visibility", true);
+
+    // Emit custom message event to webview
+    let payload = ClippyMessage {
+        text: params.text,
+    };
+    if let Err(e) = state.app_handle.emit("clippy-message", &payload) {
+        log::warn!("Failed to emit clippy-message: {}", e);
+    }
+
     (StatusCode::OK, "OK")
 }
 

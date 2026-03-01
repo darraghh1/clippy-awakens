@@ -4,11 +4,17 @@ use serde::Serialize;
 pub(crate) const VALID_EVENTS: &[&str] =
     &["complete", "error", "attention", "stop", "session-end"];
 
-/// Payload emitted to the webview
+/// Payload emitted to the webview for pre-canned events
 #[derive(Debug, Clone, Serialize)]
 pub struct ClippyEvent {
     #[serde(rename = "type")]
     pub event_type: String,
+}
+
+/// Payload emitted to the webview for custom messages (via /message endpoint)
+#[derive(Debug, Clone, Serialize)]
+pub struct ClippyMessage {
+    pub text: String,
 }
 
 /// Check if an event type string is valid
@@ -52,6 +58,16 @@ mod tests {
                 event_type
             );
         }
+    }
+
+    #[test]
+    fn test_clippy_message_serialization() {
+        let msg = ClippyMessage {
+            text: "Found the bug - missing semicolon".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"text\""));
+        assert!(json.contains("Found the bug"));
     }
 
     #[test]

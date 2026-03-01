@@ -202,10 +202,59 @@ var ClippyBridge = (function() {
         console.log('ClippyBridge: Initialized with agent');
     }
 
+    /**
+     * Handle a custom message — show agent, play animation, speak the provided text, auto-hide.
+     */
+    function handleCustomMessage(text) {
+        if (!_agent) {
+            console.error('ClippyBridge: No agent loaded');
+            return;
+        }
+
+        if (!text) {
+            console.warn('ClippyBridge: Empty custom message');
+            return;
+        }
+
+        // Clear any existing hide timer
+        if (_hideTimer) {
+            clearTimeout(_hideTimer);
+            _hideTimer = null;
+        }
+
+        // Show Clippy if hidden
+        if (!_isVisible) {
+            _agent.show();
+            _isVisible = true;
+        }
+
+        // Play a random fitting animation
+        var animations = ['Explain', 'GetAttention', 'Thinking', 'GetTechy'];
+        var anim = animations[Math.floor(Math.random() * animations.length)];
+        _agent.play(anim);
+
+        // Speak the custom text
+        _agent.speak(text);
+
+        // Set auto-hide timer
+        _hideTimer = setTimeout(function() {
+            if (_agent) {
+                _agent.play('GoodBye');
+                setTimeout(function() {
+                    if (_agent) {
+                        _agent.hide();
+                        _isVisible = false;
+                    }
+                }, 2000);
+            }
+        }, HIDE_TIMEOUT);
+    }
+
     // Public API
     return {
         init: init,
         handleEvent: handleEvent,
+        handleCustomMessage: handleCustomMessage,
         getEventConfig: getEventConfig,
         getRandomSpeech: getRandomSpeech,
         HIDE_TIMEOUT: HIDE_TIMEOUT

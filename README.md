@@ -1,69 +1,129 @@
-[Clippy.JS](http://smore.com/clippy-js)
-=========
-Add Clippy or his friends to any website for instant nostalgia.  
-Read more about the project on [our homepage](http://smore.com/clippy-js).
+# Clippy Awakens
 
+A Tauri desktop app that brings Clippy back to life as a transparent overlay on Windows.
+Receives events from Claude Code hooks via HTTP and responds with animations, speech
+bubbles, and notification sounds.
 
-Usage: Setup
-------------
-Add this code to you to your page to enable Clippy.js.
+## Prerequisites
 
-```html
-<!-- Add the stylesheet to the head -->
-<link rel="stylesheet" type="text/css" href="clippy.css" media="all">
+- Windows 10 (21H2+) or Windows 11
+- Rust toolchain (install via https://rustup.rs)
+- MSVC Build Tools (Visual Studio Build Tools 2022)
 
-...
+## Development
 
-<!-- Add these scripts to  the bottom of the page -->
-<!-- jQuery 1.7+ -->
-<script src="jquery.1.7.min.js"></script>
+### Setup
 
-<!-- Clippy.js -->
-<script src="clippy.min.js"></script>
-
-<!-- Init script -->
-<script type="text/javascript">
-    clippy.load('Merlin', function(agent){
-        // do anything with the loaded agent
-        agent.show();
-    });
-</script>
-
+```bash
+cargo install tauri-cli
 ```
 
-Usage: Actions
---------------
-All the agent actions are queued and executed by order, so you could stack them.
+### Run (dev mode)
 
-```javascript
-// play a given animation
-agent.play('Searching');
-
-// play a random animation
-agent.animate();
-
-// get a list of all the animations
-agent.animations();
-// => ["MoveLeft", "Congratulate", "Hide", "Pleased", "Acknowledge", ...]
-
-// Show text balloon
-agent.speak('When all else fails, bind some paper together. My name is Clippy.');
-
-// move to the given point, use animation if available
-agent.moveTo(100,100);
-
-// gesture at a given point (if gesture animation is available)
-agent.gestureAt(200,200);
-
-// stop the current action in the queue
-agent.stopCurrent();
-
-// stop all actions in the queue and go back to idle mode
-agent.stop();
+```bash
+cargo tauri dev
 ```
 
-Special Thanks
---------------
-* The awesome [Cinnamon Software](http://www.cinnamonsoftware.com/) for developing [Double Agent](http://doubleagent.sourceforge.net/)
-the program we used to unpack Clippy and his friends!
-* Microsoft, for creating clippy :)
+### Build (production)
+
+```bash
+cargo tauri build
+```
+
+### Run tests
+
+```bash
+cd src-tauri && cargo test
+```
+
+### Lint
+
+```bash
+cd src-tauri && cargo clippy -- -D warnings
+```
+
+## Usage
+
+1. Install the app from the `.msi` or `.exe` installer in `src-tauri/target/release/bundle/`
+2. Clippy appears in your system tray
+3. Configure your SSH connection with `-R 9999:localhost:9999`
+4. Claude Code hooks trigger Clippy animations on your Windows desktop
+
+## Event Routes
+
+| Route | Animation | Sound | Description |
+|-------|-----------|-------|-------------|
+| `GET /complete` | Congratulate | Pleasant chime | Task completed |
+| `GET /error` | Alert | Critical stop | Error occurred |
+| `GET /attention` | GetAttention | Calendar notification | Input needed |
+| `GET /stop` | Wave | Email notification | Process stopped |
+| `GET /session-end` | GoodBye | Logoff sound | Session ended |
+| `GET /message?text=...` | Random | Attention sound | Custom message |
+| `GET /health` | — | — | Health check |
+
+### Custom Messages
+
+Send custom text through Clippy's speech bubble:
+
+```bash
+curl "http://localhost:9999/message?text=Found%20the%20bug%20-%20missing%20semicolon"
+```
+
+Clippy pops up, plays a random animation, and speaks the provided text.
+
+## Tray Menu
+
+- **Left-click tray icon**: Toggle Clippy visibility
+- **Show/Hide Agent**: Toggle Clippy on screen
+- **Mute Sounds**: Toggle notification sounds
+- **Switch Agent**: Choose from 10 bundled agents
+- **Quit**: Exit the app
+
+## Bundled Agents
+
+Bonzi, Clippy, F1, Genie, Genius, Links, Merlin, Peedy, Rocky, Rover
+
+## Config Persistence
+
+Settings are saved to `%APPDATA%/com.digitalmastery.clippy-awakens/config.json`:
+- Preferred agent
+- Mute state
+- Last drag position
+
+## Architecture
+
+```
+src-tauri/src/
+  main.rs     — Tauri app entry, setup
+  server.rs   — axum HTTP server on :9999
+  events.rs   — Event type definitions
+  sounds.rs   — Windows sound playback via rodio
+  tray.rs     — System tray management
+  config.rs   — Config persistence
+  agents.rs   — Agent discovery
+
+ui/
+  index.html       — Tauri webview entry point
+  clippy-bridge.js — Event-to-animation mapping
+
+agents/           — 10 bundled MS Agent characters
+build/            — Compiled clippy.js engine
+src/              — Original clippy.js source (do not modify)
+```
+
+## Testing from Linux
+
+```bash
+# Health check
+curl http://localhost:9999/health
+
+# Test events
+curl http://localhost:9999/complete
+curl http://localhost:9999/error
+curl http://localhost:9999/attention
+curl http://localhost:9999/stop
+curl http://localhost:9999/session-end
+
+# Custom message
+curl "http://localhost:9999/message?text=Hello%20from%20Linux"
+```
