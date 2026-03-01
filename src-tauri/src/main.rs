@@ -5,21 +5,31 @@ mod agents;
 mod events;
 mod server;
 mod sounds;
+mod tray;
+
+use std::sync::Arc;
 
 fn main() {
     env_logger::init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .manage(Arc::new(tray::TrayState::new()))
         .invoke_handler(tauri::generate_handler![
             agents::list_available_agents,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+
+            // Setup system tray icon and menu
+            tray::setup_tray(&handle)?;
+
+            // Spawn HTTP server
             tauri::async_runtime::spawn(async move {
                 server::start_server(handle).await;
             });
-            log::info!("Clippy Awakens overlay started");
+
+            log::info!("Clippy Awakens started with system tray");
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -6,10 +6,11 @@ use axum::{
     Json, Router,
 };
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::events::{is_valid_event, ClippyEvent};
 use crate::sounds;
+use crate::tray::TrayState;
 
 /// Shared state for axum handlers
 #[derive(Clone)]
@@ -60,9 +61,19 @@ fn emit_event(state: &AppState, event_type: &str) {
     };
     log::info!("Event received: {}", event_type);
 
-    // Play notification sound (non-blocking — spawns a thread)
-    sounds::play_event_sound(event_type);
+    // Check mute state before playing sound
+    let tray_state = state.app_handle.state::<Arc<TrayState>>();
+    if !tray_state.is_muted() {
+        sounds::play_event_sound(event_type);
+    } else {
+        log::info!("Sound muted, skipping playback for: {}", event_type);
+    }
 
+    // Events override manual hide — ensure agent is visible
+    tray_state.set_visible(true);
+    let _ = state.app_handle.emit("clippy-visibility", true);
+
+    // Always emit to webview (animation still plays even when muted)
     if let Err(e) = state.app_handle.emit("clippy-event", &payload) {
         log::warn!("Failed to emit clippy-event: {}", e);
     }

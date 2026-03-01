@@ -100,7 +100,41 @@
                     var eventType = event.payload.type || event.payload;
                     ClippyBridge.handleEvent(eventType);
                 });
-                console.log('ClippyBridge: Tauri event listener registered');
+
+                // Listen for tray visibility toggle
+                window.__TAURI__.event.listen('clippy-visibility', function(event) {
+                    var visible = event.payload;
+                    if (visible && currentAgent) {
+                        currentAgent.show();
+                        currentAgent.play('Greeting');
+                        currentAgent.speak('You summoned me! What can I do for you?');
+                    } else if (!visible && currentAgent) {
+                        currentAgent.play('GoodBye');
+                        setTimeout(function() {
+                            if (currentAgent) {
+                                currentAgent.hide();
+                            }
+                        }, 1500);
+                    }
+                });
+
+                // Listen for mute toggle from tray
+                window.__TAURI__.event.listen('clippy-mute', function(event) {
+                    var muted = event.payload;
+                    console.log('Sound muted:', muted);
+                });
+
+                // Listen for agent switch from tray menu
+                window.__TAURI__.event.listen('clippy-switch-agent', function(event) {
+                    var agentName = event.payload;
+                    console.log('Switching agent to:', agentName);
+                    switchAgent(agentName, function(agent) {
+                        ClippyBridge.init(agent);
+                        agent.speak("I'm " + agentName + "! Nice to meet you.");
+                    });
+                });
+
+                console.log('ClippyBridge: Tauri event listeners registered');
             } else {
                 console.warn('ClippyBridge: Tauri API not available (running in browser?)');
             }
