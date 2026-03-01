@@ -88,14 +88,13 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // Build vertical offset submenu
-    let offset_up = MenuItem::with_id(app, "offset_up", "Nudge Up (+10px)", true, None::<&str>)?;
-    let offset_down = MenuItem::with_id(app, "offset_down", "Nudge Down (-10px)", true, None::<&str>)?;
+    let offset_set = MenuItem::with_id(app, "offset_set", "Set Offset...", true, None::<&str>)?;
     let offset_reset = MenuItem::with_id(app, "offset_reset", "Reset Offset", true, None::<&str>)?;
     let offset_submenu = Submenu::with_items(
         app,
         "Vertical Offset",
         true,
-        &[&offset_up, &offset_down, &offset_reset],
+        &[&offset_set, &offset_reset],
     )?;
 
     let separator2 = PredefinedMenuItem::separator(app)?;
@@ -156,18 +155,13 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     log::info!("Tray: set anchor to {}", anchor);
                     let _ = app.emit("clippy-anchor", anchor);
                 }
-                "offset_up" | "offset_down" | "offset_reset" => {
-                    let delta: i32 = match id {
-                        "offset_up" => 10,
-                        "offset_down" => -10,
-                        "offset_reset" => 0, // sentinel: JS will interpret 0 as reset
-                        _ => 0,
-                    };
-                    let is_reset = id == "offset_reset";
-                    log::info!("Tray: offset {} (reset={})", delta, is_reset);
-                    // Send both the delta and whether it's a reset
-                    let payload = serde_json::json!({ "delta": delta, "reset": is_reset });
-                    let _ = app.emit("clippy-offset", payload);
+                "offset_set" => {
+                    log::info!("Tray: offset prompt requested");
+                    let _ = app.emit("clippy-offset-prompt", ());
+                }
+                "offset_reset" => {
+                    log::info!("Tray: offset reset");
+                    let _ = app.emit("clippy-offset", serde_json::json!({ "value": 0 }));
                 }
                 _ => {}
             }

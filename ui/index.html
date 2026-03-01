@@ -251,20 +251,28 @@
                 }
             });
 
-            // Listen for vertical offset change from tray
-            window.__TAURI__.event.listen('clippy-offset', function(event) {
-                var data = event.payload;
-                if (data.reset) {
-                    _verticalOffset = 0;
-                } else {
-                    _verticalOffset += data.delta;
-                    // Clamp to reasonable range
-                    _verticalOffset = Math.max(0, Math.min(500, _verticalOffset));
-                }
-                console.log('Vertical offset:', _verticalOffset);
-                // Persist via Tauri command
+            // Listen for offset prompt request from tray
+            window.__TAURI__.event.listen('clippy-offset-prompt', function() {
+                var input = window.prompt(
+                    'Enter vertical offset in pixels (0–500):',
+                    String(_verticalOffset)
+                );
+                if (input === null) return; // cancelled
+                var val = parseInt(input, 10);
+                if (isNaN(val)) return;
+                _verticalOffset = Math.max(0, Math.min(500, val));
+                console.log('Vertical offset set to:', _verticalOffset);
                 window.__TAURI__.core.invoke('save_vertical_offset', { offset: _verticalOffset });
-                // Reposition immediately
+                if (currentAgent && _lastTerminalInfo && _lastTerminalInfo.found) {
+                    positionAgentAtTerminal(currentAgent, _lastTerminalInfo);
+                }
+            });
+
+            // Listen for direct offset value from tray (e.g. reset)
+            window.__TAURI__.event.listen('clippy-offset', function(event) {
+                _verticalOffset = event.payload.value || 0;
+                console.log('Vertical offset:', _verticalOffset);
+                window.__TAURI__.core.invoke('save_vertical_offset', { offset: _verticalOffset });
                 if (currentAgent && _lastTerminalInfo && _lastTerminalInfo.found) {
                     positionAgentAtTerminal(currentAgent, _lastTerminalInfo);
                 }
