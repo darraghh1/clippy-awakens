@@ -26,5 +26,8 @@ Desktop.ini
 # Internal planning docs
 plans/
 
+# Python
+__pycache__/
+
 # Claude Code internals
 .claude/
