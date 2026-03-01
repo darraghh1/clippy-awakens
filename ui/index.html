@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clippy Awakens</title>
+    <link rel="stylesheet" type="text/css" href="build/clippy.css">
     <style>
         html, body {
             margin: 0;
@@ -21,21 +22,80 @@
         .clippy-balloon {
             pointer-events: auto;
         }
-
-        /* Debug indicator — remove after verification */
-        #debug-overlay {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            color: rgba(255, 0, 0, 0.5);
-            font-size: 10px;
-            font-family: monospace;
-            pointer-events: none;
-            z-index: 9999;
-        }
     </style>
 </head>
 <body>
-    <div id="debug-overlay">Clippy Awakens — Overlay Active</div>
+    <script src="vendor/jquery.min.js"></script>
+    <script src="build/clippy.js"></script>
+    <script src="clippy-test.js"></script>
+    <script>
+        // Point to local agents directory
+        clippy.BASE_PATH = 'agents/';
+
+        var currentAgent = null;
+        var currentAgentName = 'Clippy';
+
+        // Switch to a different agent at runtime
+        function switchAgent(name, callback) {
+            console.log('Switching agent to:', name);
+
+            // Save current position before destroying
+            var lastPosition = null;
+            if (currentAgent) {
+                var offset = currentAgent._el ? currentAgent._el.offset() : null;
+                if (offset) {
+                    lastPosition = { left: offset.left, top: offset.top };
+                }
+                // Hide and destroy current agent
+                currentAgent.hide(true);
+                currentAgent.stop();
+                // Remove DOM elements
+                if (currentAgent._el) currentAgent._el.remove();
+                if (currentAgent._balloon && currentAgent._balloon._balloon) {
+                    currentAgent._balloon._balloon.remove();
+                }
+                currentAgent = null;
+            }
+
+            // Clear cached data so a fresh agent instance is created
+            delete clippy.load._data[name];
+            delete clippy.load._maps[clippy.BASE_PATH + name];
+            delete clippy.load._sounds[name];
+
+            clippy.load(name, function(agent) {
+                currentAgent = agent;
+                currentAgentName = name;
+
+                // Restore position if we had one
+                if (lastPosition) {
+                    agent.moveTo(lastPosition.left, lastPosition.top, 0);
+                }
+
+                agent.show();
+
+                // Run self-test on new agent
+                clippySelfTest(agent);
+
+                console.log('Switched to agent:', name);
+                if (callback) callback(agent);
+            }, function(err) {
+                console.error('Failed to load agent ' + name + ':', err);
+            });
+        }
+
+        // Load default agent on startup
+        clippy.load('Clippy', function(agent) {
+            currentAgent = agent;
+            agent.show();
+            agent.speak('Hello! Clippy Awakens is running.');
+
+            // Run self-test
+            clippySelfTest(agent);
+
+            console.log('Clippy loaded successfully');
+        }, function(err) {
+            console.error('Failed to load Clippy:', err);
+        });
+    </script>
 </body>
 </html>

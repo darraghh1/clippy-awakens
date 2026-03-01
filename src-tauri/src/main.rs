@@ -1,12 +1,23 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agents;
+mod events;
+mod server;
+
 fn main() {
     env_logger::init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .setup(|_app| {
+        .invoke_handler(tauri::generate_handler![
+            agents::list_available_agents,
+        ])
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                server::start_server(handle).await;
+            });
             log::info!("Clippy Awakens overlay started");
             Ok(())
         })
