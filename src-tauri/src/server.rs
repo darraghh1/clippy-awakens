@@ -112,11 +112,16 @@ struct MessageParams {
     text: String,
 }
 
+/// Maximum length for custom message text (characters, not bytes).
+const MAX_MESSAGE_LEN: usize = 280;
+
 async fn handle_message(
     State(state): State<AppState>,
     Query(params): Query<MessageParams>,
 ) -> impl IntoResponse {
-    log::info!("Custom message received: {}", params.text);
+    // Truncate to a reasonable speech bubble length
+    let text: String = params.text.chars().take(MAX_MESSAGE_LEN).collect();
+    log::info!("Custom message received: {}", text);
 
     // Check mute state before playing sound
     let tray_state = state.app_handle.state::<Arc<TrayState>>();
@@ -129,9 +134,7 @@ async fn handle_message(
     let _ = state.app_handle.emit("clippy-visibility", true);
 
     // Emit custom message event to webview
-    let payload = ClippyMessage {
-        text: params.text,
-    };
+    let payload = ClippyMessage { text };
     if let Err(e) = state.app_handle.emit("clippy-message", &payload) {
         log::warn!("Failed to emit clippy-message: {}", e);
     }

@@ -8,9 +8,11 @@
 var ClippyBridge = (function() {
     'use strict';
 
-    // How long Clippy stays visible after an event (ms)
-    var HIDE_TIMEOUT = 8000;
-    var _hideTimer = null;
+    // How long Clippy's speech bubble stays visible after an event (ms)
+    var SPEECH_TIMEOUT = 8000;
+    // Legacy export — tests reference HIDE_TIMEOUT
+    var HIDE_TIMEOUT = SPEECH_TIMEOUT;
+    var _speechTimer = null;
     var _agent = null;
     var _isVisible = false;
 
@@ -154,10 +156,10 @@ var ClippyBridge = (function() {
             return;
         }
 
-        // Clear any existing hide timer
-        if (_hideTimer) {
-            clearTimeout(_hideTimer);
-            _hideTimer = null;
+        // Clear any pending speech dismiss timer
+        if (_speechTimer) {
+            clearTimeout(_speechTimer);
+            _speechTimer = null;
         }
 
         // Show Clippy if hidden
@@ -179,18 +181,12 @@ var ClippyBridge = (function() {
             _agent.speak(speech);
         }
 
-        // Set auto-hide timer
-        _hideTimer = setTimeout(function() {
-            if (_agent) {
-                _agent.play('GoodBye');
-                setTimeout(function() {
-                    if (_agent) {
-                        _agent.hide();
-                        _isVisible = false;
-                    }
-                }, 2000);
+        // Dismiss the speech bubble after timeout but keep Clippy visible
+        _speechTimer = setTimeout(function() {
+            if (_agent && _agent.closeBalloon) {
+                _agent.closeBalloon();
             }
-        }, HIDE_TIMEOUT);
+        }, SPEECH_TIMEOUT);
     }
 
     /**
@@ -216,10 +212,10 @@ var ClippyBridge = (function() {
             return;
         }
 
-        // Clear any existing hide timer
-        if (_hideTimer) {
-            clearTimeout(_hideTimer);
-            _hideTimer = null;
+        // Clear any pending speech dismiss timer
+        if (_speechTimer) {
+            clearTimeout(_speechTimer);
+            _speechTimer = null;
         }
 
         // Show Clippy if hidden
@@ -236,18 +232,12 @@ var ClippyBridge = (function() {
         // Speak the custom text
         _agent.speak(text);
 
-        // Set auto-hide timer
-        _hideTimer = setTimeout(function() {
-            if (_agent) {
-                _agent.play('GoodBye');
-                setTimeout(function() {
-                    if (_agent) {
-                        _agent.hide();
-                        _isVisible = false;
-                    }
-                }, 2000);
+        // Dismiss the speech bubble after timeout but keep Clippy visible
+        _speechTimer = setTimeout(function() {
+            if (_agent && _agent.closeBalloon) {
+                _agent.closeBalloon();
             }
-        }, HIDE_TIMEOUT);
+        }, SPEECH_TIMEOUT);
     }
 
     // Public API

@@ -12,7 +12,7 @@
             width: 100%;
             height: 100%;
             background: transparent;
-            overflow: hidden;
+            overflow: visible;
             /* Allow clicks to pass through to desktop */
             pointer-events: none;
         }
@@ -36,6 +36,48 @@
 
         var currentAgent = null;
         var currentAgentName = 'Clippy';
+
+        // Stores the latest terminal position so we can apply it as soon as the agent loads.
+        // This fixes the race where the tracker emits before the agent is ready.
+        var _lastTerminalInfo = null;
+
+        // Anchor corner: "bottom-right" | "bottom-left" | "top-right" | "top-left"
+        var _anchor = 'bottom-right';
+        // Vertical offset in pixels (positive = away from anchored edge)
+        var _verticalOffset = 0;
+
+        // Position agent at the configured corner of the terminal window
+        function positionAgentAtTerminal(agent, info) {
+            var agentWidth = 124;
+            var agentHeight = 93;
+            var padding = 15;
+
+            // Convert screen-absolute coords to webview-relative coords.
+            var winOffsetX = window.screenX || 0;
+            var winOffsetY = window.screenY || 0;
+
+            var targetX, targetY;
+
+            // Horizontal: left or right side of terminal
+            if (_anchor.indexOf('right') !== -1) {
+                targetX = info.x + info.width - agentWidth - padding;
+            } else {
+                targetX = info.x + padding;
+            }
+
+            // Vertical: top or bottom of terminal, with offset
+            if (_anchor.indexOf('bottom') !== -1) {
+                targetY = info.y + info.height - agentHeight - padding - _verticalOffset;
+            } else {
+                targetY = info.y + padding + _verticalOffset;
+            }
+
+            // Apply webview offset
+            targetX -= winOffsetX;
+            targetY -= winOffsetY;
+
+            agent.moveTo(targetX, targetY, 0);
+        }
 
         // Save position after drag (hooks into clippy.js drag end)
         function hookDragSave(agent) {
@@ -160,6 +202,33 @@
                 window.__TAURI__.core.invoke('save_mute_state', { muted: muted });
             });
 
+            // Listen for terminal window position updates — anchor Clippy inside bottom-right
+            var _trackCount = 0;
+            window.__TAURI__.event.listen('terminal-position', function(event) {
+                var info = event.payload;
+                _trackCount++;
+
+                // Always store the latest position (fixes race where tracker emits
+                // before agent is loaded — we apply it in loadAndStart).
+                _lastTerminalInfo = info;
+
+                if (!currentAgent) return;
+                if (!info.found) return;
+
+                // Hide Clippy when another window is in the foreground
+                // (so he doesn't float on top of Settings, browser, etc.)
+                if (!info.foreground) {
+                    // Hide all clippy elements via jQuery
+                    $('.clippy, .clippy-balloon').css('visibility', 'hidden');
+                    return;
+                }
+
+                // Terminal is foreground — ensure Clippy is visible and positioned
+                $('.clippy, .clippy-balloon').css('visibility', 'visible');
+
+                positionAgentAtTerminal(currentAgent, info);
+            });
+
             // Listen for agent switch from tray menu
             window.__TAURI__.event.listen('clippy-switch-agent', function(event) {
                 var agentName = event.payload;
@@ -168,6 +237,37 @@
                     ClippyBridge.init(agent);
                     agent.speak("I'm " + agentName + "! Nice to meet you.");
                 });
+            });
+
+            // Listen for anchor corner change from tray
+            window.__TAURI__.event.listen('clippy-anchor', function(event) {
+                _anchor = event.payload;
+                console.log('Anchor changed to:', _anchor);
+                // Persist via Tauri command
+                window.__TAURI__.core.invoke('save_anchor', { anchor: _anchor });
+                // Reposition immediately
+                if (currentAgent && _lastTerminalInfo && _lastTerminalInfo.found) {
+                    positionAgentAtTerminal(currentAgent, _lastTerminalInfo);
+                }
+            });
+
+            // Listen for vertical offset change from tray
+            window.__TAURI__.event.listen('clippy-offset', function(event) {
+                var data = event.payload;
+                if (data.reset) {
+                    _verticalOffset = 0;
+                } else {
+                    _verticalOffset += data.delta;
+                    // Clamp to reasonable range
+                    _verticalOffset = Math.max(0, Math.min(500, _verticalOffset));
+                }
+                console.log('Vertical offset:', _verticalOffset);
+                // Persist via Tauri command
+                window.__TAURI__.core.invoke('save_vertical_offset', { offset: _verticalOffset });
+                // Reposition immediately
+                if (currentAgent && _lastTerminalInfo && _lastTerminalInfo.found) {
+                    positionAgentAtTerminal(currentAgent, _lastTerminalInfo);
+                }
             });
 
             console.log('ClippyBridge: Tauri event listeners registered');
@@ -183,8 +283,12 @@
                     currentAgent = agent;
                     currentAgentName = agentName;
 
-                    // Restore saved position
-                    if (position) {
+                    // If the tracker already sent a terminal position before
+                    // the agent was ready, apply it now. Otherwise fall back
+                    // to any saved config position.
+                    if (_lastTerminalInfo && _lastTerminalInfo.found) {
+                        positionAgentAtTerminal(agent, _lastTerminalInfo);
+                    } else if (position) {
                         agent.moveTo(position.x, position.y, 0);
                     }
 
@@ -193,9 +297,6 @@
 
                     // Initialize the event bridge
                     ClippyBridge.init(agent);
-
-                    // Register Tauri listeners
-                    registerTauriListeners();
 
                     // Initial greeting
                     agent.speak(agentName + ' Awakens! Listening for Claude Code events.');
@@ -215,12 +316,20 @@
                 });
             }
 
-            // Try to load config from Tauri
+            // Register Tauri listeners BEFORE loading the agent so that
+            // terminal-position events are captured even while clippy.js
+            // is still loading its sprite sheet.
             if (window.__TAURI__) {
+                registerTauriListeners();
+
                 window.__TAURI__.core.invoke('get_config').then(function(config) {
                     console.log('Loaded config:', config);
                     startAgent = config.agent || 'Clippy';
                     startPosition = config.position || null;
+                    // Restore anchor + offset from saved config
+                    _anchor = config.anchor || 'bottom-right';
+                    _verticalOffset = config.vertical_offset || 0;
+                    console.log('Anchor:', _anchor, 'Offset:', _verticalOffset);
                     loadAndStart(startAgent, startPosition);
                 }).catch(function(err) {
                     console.warn('Failed to load config, using defaults:', err);

@@ -29,5 +29,11 @@ plans/
 # Python
 __pycache__/
 
+# Build-time copies of symlinked dirs (created by build.sh)
+# The originals live at /build and /agents — these are copies into ui/
+# so Tauri's frontend bundler can embed them.
+ui/build/
+ui/agents/
+
 # Claude Code internals
 .claude/

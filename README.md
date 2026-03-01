@@ -1,145 +1,89 @@
 # Clippy Awakens
 
-A Tauri desktop app that brings Clippy back to life as a transparent overlay on Windows.
-Receives events from Claude Code hooks via HTTP and responds with animations, speech
-bubbles, and notification sounds.
+A Tauri v2 desktop app that brings Microsoft's beloved paperclip back to life. Clippy sits as a transparent overlay on your Windows desktop, anchored to your terminal window, and reacts to Claude Code events with animations, speech bubbles, and sounds.
 
-## Prerequisites
+## Features
 
-- Windows 10 (21H2+) or Windows 11
-- Rust toolchain (install via https://rustup.rs)
-- MSVC Build Tools (Visual Studio Build Tools 2022)
+- **Terminal tracking** — Clippy follows your Windows Terminal window in real-time, anchored to the corner of your choice
+- **Multi-monitor** — overlay spans all monitors automatically
+- **Foreground-aware** — Clippy hides when you switch to another app, reappears when you return to terminal
+- **Click-through** — transparent overlay doesn't interfere with your desktop
+- **10 bundled agents** — Clippy, Bonzi, Merlin, Genie, and more
+- **Configurable position** — anchor to any corner + pixel-level vertical offset via tray menu
+- **Persistent** — Clippy stays visible between events (no more pop-in/pop-out)
+- **SSH tunnel support** — works with remote Claude Code sessions via `RemoteForward`
 
-## Development
-
-### Setup
-
-```bash
-cargo install tauri-cli
-```
-
-### Run (dev mode)
-
-```bash
-cargo tauri dev
-```
-
-### Build (production)
-
-```bash
-cargo tauri build
-```
-
-### Run tests
-
-```bash
-cd src-tauri && cargo test
-```
-
-### Lint
-
-```bash
-cd src-tauri && cargo clippy -- -D warnings
-```
-
-## Usage
-
-1. Install the app from the `.msi` or `.exe` installer in `src-tauri/target/release/bundle/`
-2. Clippy appears in your system tray
-3. Configure your SSH connection with `-R 9999:localhost:9999`
-4. Claude Code hooks trigger Clippy animations on your Windows desktop
-
-## Event Routes
-
-| Route | Animation | Sound | Description |
-|-------|-----------|-------|-------------|
-| `GET /complete` | Congratulate | Pleasant chime | Task completed |
-| `GET /error` | Alert | Critical stop | Error occurred |
-| `GET /attention` | GetAttention | Calendar notification | Input needed |
-| `GET /stop` | Wave | Email notification | Process stopped |
-| `GET /session-end` | GoodBye | Logoff sound | Session ended |
-| `GET /message?text=...` | Random | Attention sound | Custom message |
-| `GET /health` | — | — | Health check |
-
-### Custom Messages
-
-Send custom text through Clippy's speech bubble:
-
-```bash
-curl "http://localhost:9999/message?text=Found%20the%20bug%20-%20missing%20semicolon"
-```
-
-Clippy pops up, plays a random animation, and speaks the provided text.
-
-## Tray Menu
-
-- **Left-click tray icon**: Toggle Clippy visibility
-- **Show/Hide Agent**: Toggle Clippy on screen
-- **Mute Sounds**: Toggle notification sounds
-- **Switch Agent**: Choose from 10 bundled agents
-- **Quit**: Exit the app
-
-## Bundled Agents
-
-Bonzi, Clippy, F1, Genie, Genius, Links, Merlin, Peedy, Rocky, Rover
-
-## Config Persistence
-
-Settings are saved to `%APPDATA%/com.digitalmastery.clippy-awakens/config.json`:
-- Preferred agent
-- Mute state
-- Last drag position
-
-## Architecture
-
-```
-src-tauri/src/
-  main.rs     — Tauri app entry, setup
-  server.rs   — axum HTTP server on :9999
-  events.rs   — Event type definitions
-  sounds.rs   — Windows sound playback via rodio
-  tray.rs     — System tray management
-  config.rs   — Config persistence
-  agents.rs   — Agent discovery
-
-ui/
-  index.html       — Tauri webview entry point
-  clippy-bridge.js — Event-to-animation mapping
-
-agents/           — 10 bundled MS Agent characters
-build/            — Compiled clippy.js engine
-src/              — Original clippy.js source (do not modify)
-```
-
-## Claude Code Hooks Integration
-
-Pre-built hooks are included in `hooks/claude-code/` to connect Claude Code to Clippy automatically.
-
-### What fires when
-
-| Hook | Event | Clippy does... |
-|------|-------|----------------|
-| `on_stop.py` | Claude finishes a task | Congratulatory animation + witty remark |
-| `on_notification.py` | Claude needs your input | Attention-grabbing animation |
-| `on_session_end.py` | Session ends | Farewell wave |
-| `on_error.py` | A tool call fails | Alert animation + snarky comment |
+## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) (Python package runner)
-- `curl` (pre-installed on most systems)
-- SSH tunnel: `ssh -R 9999:localhost:9999 your-linux-host`
+- Windows 10 (21H2+) or Windows 11
+- Rust toolchain — [rustup.rs](https://rustup.rs)
+- MSVC Build Tools (Visual Studio Build Tools 2022, C++ workload)
+- Tauri CLI: `cargo install tauri-cli`
 
-### Install
-
-1. Copy the hooks directory somewhere permanent (or use it from the cloned repo):
+### Build & Install
 
 ```bash
+git clone https://github.com/darraghh1/clippy-awakens.git
+cd clippy-awakens
+bash build.sh
+```
+
+This runs tests and produces both installers in `src-tauri/target/release/bundle/`:
+
+| Installer | Use case |
+|-----------|----------|
+| `Clippy Awakens_x.x.x_x64-setup.exe` | Standard install (recommended) |
+| `Clippy Awakens_x.x.x_x64_en-US.msi` | Silent/managed deployment |
+
+The NSIS installer uses per-user mode — no admin privileges required.
+
+### Development
+
+```bash
+bash build.sh --dev    # prepares frontend + launches dev mode
+```
+
+Or manually:
+
+```bash
+# Copy symlinked dirs for Windows (build.sh does this automatically)
+rm -rf ui/build ui/agents && cp -r build ui/build && cp -r agents ui/agents
+
+cargo tauri dev        # dev mode
+cd src-tauri && cargo test   # run tests (39 tests)
+cd src-tauri && cargo clippy # lint
+```
+
+## Connecting Claude Code
+
+Clippy listens on `127.0.0.1:9999`. When Claude Code runs on a remote server, you need an SSH tunnel to forward events back to your Windows machine.
+
+### 1. SSH Config
+
+Add to `~/.ssh/config` on your Windows machine:
+
+```
+Host your-server
+    HostName your-server.example.com
+    User yourname
+    RemoteForward 9999 127.0.0.1:9999
+    ExitOnForwardFailure no
+```
+
+`ExitOnForwardFailure no` lets multiple SSH sessions share the tunnel — the first one claims port 9999, the rest connect normally.
+
+### 2. Claude Code Hooks
+
+Pre-built hooks are included in `hooks/claude-code/`. Copy them and configure:
+
+```bash
+# On your remote server
 cp -r hooks/claude-code ~/.claude/hooks/clippy-awakens
 ```
 
-2. Add hooks to your `.claude/settings.json` (merge with existing hooks if you have them):
+Add to your `.claude/settings.json`:
 
 ```json
 {
@@ -169,41 +113,84 @@ cp -r hooks/claude-code ~/.claude/hooks/clippy-awakens
 }
 ```
 
-3. Test it:
+### 3. Test
 
 ```bash
-curl http://localhost:9999/health    # should return OK
-curl http://localhost:9999/complete  # Clippy should celebrate
+curl http://localhost:9999/health     # {"app":"clippy-awakens","status":"ok",...}
+curl http://localhost:9999/complete   # Clippy celebrates
+curl http://localhost:9999/error      # Clippy alerts
+curl "http://localhost:9999/message?text=Hello+from+Linux"  # Custom speech bubble
 ```
 
-### Custom messages from hooks
+## Event Routes
 
-Use `notify.py` directly in your own hooks:
+| Route | Animation | Sound | Description |
+|-------|-----------|-------|-------------|
+| `GET /complete` | Congratulate | Pleasant chime | Task completed |
+| `GET /error` | Alert | Critical stop | Error occurred |
+| `GET /attention` | GetAttention | Calendar notification | Input needed |
+| `GET /stop` | Wave | Email notification | Process stopped |
+| `GET /session-end` | GoodBye | Logoff sound | Session ended |
+| `GET /message?text=...` | Random | Attention sound | Custom speech bubble |
+| `GET /health` | — | — | Health check JSON |
 
-```python
-from notify import notify, message
+## Tray Menu
 
-notify("complete")                           # predefined event
-message("Refactored 12 files successfully")  # custom speech bubble
+Right-click the system tray icon for:
+
+- **Show/Hide Agent** — toggle Clippy visibility
+- **Mute Sounds** — toggle notification audio
+- **Switch Agent** — Bonzi, Clippy, F1, Genie, Genius, Links, Merlin, Peedy, Rocky, Rover
+- **Position** — anchor Clippy to any terminal corner (top-left/right, bottom-left/right)
+- **Vertical Offset** — nudge up/down 10px at a time (handy for clearing your status line)
+- **Quit** — exit the app
+
+Left-click the tray icon to quickly toggle visibility.
+
+## Config
+
+Settings persist to `%APPDATA%/com.digitalmastery.clippy-awakens/config.json`:
+
+- Preferred agent
+- Mute state
+- Last position
+- Anchor corner
+- Vertical offset
+
+## Architecture
+
+```
+src-tauri/src/
+  main.rs      — App entry, virtual screen sizing, click-through
+  server.rs    — axum HTTP server on :9999
+  tracker.rs   — Win32 API: terminal position + foreground polling
+  events.rs    — Event type definitions
+  sounds.rs    — Windows sound playback via rodio
+  tray.rs      — System tray + position/offset menus
+  config.rs    — JSON config persistence
+  agents.rs    — Agent discovery
+
+ui/
+  index.html        — Webview: terminal tracking, anchor logic
+  clippy-bridge.js  — Event-to-animation mapping, speech pools
+
+hooks/claude-code/  — Python hooks for Claude Code integration
+agents/             — 10 bundled MS Agent sprite sheets
+build/              — Compiled clippy.js engine
 ```
 
-### Full settings example
+## How It Works
 
-See `hooks/claude-code/settings.example.json` for a complete hooks configuration template.
+1. Claude Code hook fires on your remote server
+2. Hook script `curl`s `localhost:9999` (tunnelled via SSH back to Windows)
+3. axum HTTP handler emits a Tauri event + plays a Windows system sound
+4. JavaScript listener triggers a clippy.js animation + randomised speech bubble
+5. `tracker.rs` polls Windows Terminal's position via Win32 `FindWindowW` every 300ms
+6. Clippy follows the terminal, hides when you alt-tab away, reappears when you return
 
-## Testing from Linux
+## License
 
-```bash
-# Health check
-curl http://localhost:9999/health
+MIT — see [MIT-LICENSE.txt](MIT-LICENSE.txt).
 
-# Test events
-curl http://localhost:9999/complete
-curl http://localhost:9999/error
-curl http://localhost:9999/attention
-curl http://localhost:9999/stop
-curl http://localhost:9999/session-end
-
-# Custom message
-curl "http://localhost:9999/message?text=Hello%20from%20Linux"
-```
+The clippy.js engine is from [smore-inc/clippy.js](https://github.com/smore-inc/clippy.js) (2012, Fireplace Inc).
+Microsoft Agent characters and the Clippy brand are property of Microsoft Corporation.

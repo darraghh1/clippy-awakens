@@ -6,9 +6,11 @@ mod config;
 mod events;
 mod server;
 mod sounds;
+mod tracker;
 mod tray;
 
 use std::sync::Arc;
+use tauri::Manager;
 
 fn main() {
     env_logger::init();
@@ -22,16 +24,71 @@ fn main() {
             config::save_position_cmd,
             config::save_agent_preference,
             config::save_mute_state,
+            config::save_anchor,
+            config::save_vertical_offset,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+
+            if let Some(window) = app.get_webview_window("main") {
+                let decorated = window.is_decorated().unwrap_or(true);
+
+                if !decorated {
+                    // Production mode: span all monitors so Clippy can follow
+                    // the terminal across any screen
+                    if let Ok(monitors) = window.available_monitors() {
+                        if !monitors.is_empty() {
+                            let mut min_x = i32::MAX;
+                            let mut min_y = i32::MAX;
+                            let mut max_x = i32::MIN;
+                            let mut max_y = i32::MIN;
+
+                            for mon in &monitors {
+                                let pos = mon.position();
+                                let size = mon.size();
+                                min_x = min_x.min(pos.x);
+                                min_y = min_y.min(pos.y);
+                                max_x = max_x.max(pos.x + size.width as i32);
+                                max_y = max_y.max(pos.y + size.height as i32);
+                            }
+
+                            let virt_w = (max_x - min_x) as u32;
+                            let virt_h = (max_y - min_y) as u32;
+
+                            log::info!(
+                                "Virtual screen: {}x{} at ({}, {}), spanning {} monitor(s)",
+                                virt_w, virt_h, min_x, min_y, monitors.len()
+                            );
+
+                            use tauri::{LogicalPosition, LogicalSize};
+                            let _ = window.set_position(LogicalPosition::new(min_x, min_y));
+                            let _ = window.set_size(LogicalSize::new(virt_w, virt_h));
+                        }
+                    }
+
+                    // Click-through: let mouse events pass to the desktop
+                    if let Err(e) = window.set_ignore_cursor_events(true) {
+                        log::warn!("Failed to set ignore cursor events: {}", e);
+                    } else {
+                        log::info!("Window set to ignore cursor events (click-through)");
+                    }
+                } else {
+                    log::info!("Debug mode: cursor events NOT ignored (for DevTools access)");
+                }
+            }
 
             // Setup system tray icon and menu
             tray::setup_tray(&handle)?;
 
             // Spawn HTTP server
+            let server_handle = handle.clone();
             tauri::async_runtime::spawn(async move {
-                server::start_server(handle).await;
+                server::start_server(server_handle).await;
+            });
+
+            // Spawn terminal window tracker
+            tauri::async_runtime::spawn(async move {
+                tracker::start_tracker(handle).await;
             });
 
             log::info!("Clippy Awakens started with system tray");

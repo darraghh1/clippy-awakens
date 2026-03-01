@@ -22,6 +22,7 @@
         "shadow": false
       }
     ],
+    "withGlobalTauri": true,
     "security": {
       "csp": null
     }
@@ -36,22 +37,13 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
-    "resources": {
-      "../agents/Bonzi/*": "agents/Bonzi/",
-      "../agents/Clippy/*": "agents/Clippy/",
-      "../agents/F1/*": "agents/F1/",
-      "../agents/Genie/*": "agents/Genie/",
-      "../agents/Genius/*": "agents/Genius/",
-      "../agents/Links/*": "agents/Links/",
-      "../agents/Merlin/*": "agents/Merlin/",
-      "../agents/Peedy/*": "agents/Peedy/",
-      "../agents/Rocky/*": "agents/Rocky/",
-      "../agents/Rover/*": "agents/Rover/"
-    },
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "timestampUrl": "",
+      "nsis": {
+        "installMode": "currentUser"
+      }
     }
   }
 }

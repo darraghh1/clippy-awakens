@@ -24,6 +24,18 @@ pub struct AppConfig {
     pub agent: String,
     pub muted: bool,
     pub position: Position,
+    /// Which corner of the terminal window to anchor to.
+    /// One of: "bottom-right", "bottom-left", "top-right", "top-left"
+    #[serde(default = "default_anchor")]
+    pub anchor: String,
+    /// Vertical pixel offset — positive moves away from the anchored edge
+    /// (e.g. upward when anchored to bottom, downward when anchored to top).
+    #[serde(default)]
+    pub vertical_offset: i32,
+}
+
+fn default_anchor() -> String {
+    "bottom-right".to_string()
 }
 
 impl Default for AppConfig {
@@ -32,6 +44,8 @@ impl Default for AppConfig {
             agent: "Clippy".to_string(),
             muted: false,
             position: Position::default(),
+            anchor: default_anchor(),
+            vertical_offset: 0,
         }
     }
 }
@@ -103,6 +117,34 @@ pub fn save_mute_state(app_handle: tauri::AppHandle, muted: bool) {
     }
 }
 
+const VALID_ANCHORS: &[&str] = &["bottom-right", "bottom-left", "top-right", "top-left"];
+
+/// Tauri command: save anchor corner preference
+#[tauri::command]
+pub fn save_anchor(app_handle: tauri::AppHandle, anchor: String) {
+    if !VALID_ANCHORS.contains(&anchor.as_str()) {
+        log::warn!("Invalid anchor value rejected: {}", anchor);
+        return;
+    }
+    let path = get_config_file(&app_handle);
+    let mut cfg = load_config(&path).unwrap_or_default();
+    cfg.anchor = anchor;
+    if let Err(e) = save_config(&path, &cfg) {
+        log::warn!("Failed to save anchor: {}", e);
+    }
+}
+
+/// Tauri command: save vertical offset
+#[tauri::command]
+pub fn save_vertical_offset(app_handle: tauri::AppHandle, offset: i32) {
+    let path = get_config_file(&app_handle);
+    let mut cfg = load_config(&path).unwrap_or_default();
+    cfg.vertical_offset = offset;
+    if let Err(e) = save_config(&path, &cfg) {
+        log::warn!("Failed to save vertical offset: {}", e);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,6 +157,8 @@ mod tests {
         assert!(!config.muted);
         assert_eq!(config.position.x, 1536.0);
         assert_eq!(config.position.y, 864.0);
+        assert_eq!(config.anchor, "bottom-right");
+        assert_eq!(config.vertical_offset, 0);
     }
 
     #[test]
@@ -133,6 +177,9 @@ mod tests {
             agent: "Merlin".to_string(),
             muted: true,
             position: Position { x: 100.0, y: 200.0 },
+            anchor: "top-left".to_string(),
+            vertical_offset: 42,
+            ..Default::default()
         };
         save_config(&path, &config).unwrap();
 
@@ -141,6 +188,8 @@ mod tests {
         assert!(loaded.muted);
         assert_eq!(loaded.position.x, 100.0);
         assert_eq!(loaded.position.y, 200.0);
+        assert_eq!(loaded.anchor, "top-left");
+        assert_eq!(loaded.vertical_offset, 42);
     }
 
     #[test]
@@ -192,8 +241,7 @@ mod tests {
         for agent in &agents {
             let config = AppConfig {
                 agent: agent.to_string(),
-                muted: false,
-                position: Position::default(),
+                ..Default::default()
             };
             save_config(&path, &config).unwrap();
             let loaded = load_config(&path).unwrap();
@@ -204,9 +252,8 @@ mod tests {
     #[test]
     fn test_config_serialization_format() {
         let config = AppConfig {
-            agent: "Clippy".to_string(),
-            muted: false,
             position: Position { x: 100.0, y: 200.0 },
+            ..Default::default()
         };
         let json = serde_json::to_string_pretty(&config).unwrap();
         assert!(json.contains("\"agent\""));
@@ -214,5 +261,7 @@ mod tests {
         assert!(json.contains("\"position\""));
         assert!(json.contains("\"x\""));
         assert!(json.contains("\"y\""));
+        assert!(json.contains("\"anchor\""));
+        assert!(json.contains("\"vertical_offset\""));
     }
 }
